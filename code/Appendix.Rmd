@@ -1,0 +1,158 @@
+---
+title: "Appendix"
+output: html_document
+date: "2024-02-02"
+---
+
+# APPENDIX
+
+```{r}
+library(BAS)
+library(caret)
+
+# import of dataset
+covid.data <- read.csv("covidLom2020_21.csv")
+
+#covid.data
+```
+
+## Data Preprocessing
+
+```{r}
+# binarization of "color" columns
+covid.data$gialla <- as.numeric(covid.data$color == "Gialla")
+covid.data$bianca <- as.numeric(covid.data$color == "Bianca")
+covid.data$rossa <- as.numeric(covid.data$color == "Rossa")
+covid.data$arancione <- as.numeric(covid.data$color == "Arancione")
+
+# elimination of unused columns
+covid.data$color<-NULL
+covid.data$X<-NULL
+
+```
+
+## Functions
+
+```{r}
+# Function to standardize the specific numeric columns
+standardize <- function(data, cols) {
+  temp.data <- data
+  for (col in cols) {
+    if (is.numeric(data[[col]])) {
+      temp.data[[col]] <- scale(data[[col]])
+    }
+  }
+  temp.data
+  return(temp.data)
+}
+
+# Function to compute the MSE
+ mse_freq <- function (model, testdata, target) {
+   y <- predict(model, testdata)
+   t <- testdata[[target]]
+   return (mean((t - y)^2))
+ }
+
+# Function used to shuffle the data
+# The function uses a seed for reproducibility reason
+shuffle <- function(data, seed=NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+  shuffled_indices <- sample(nrow(data))
+  shuffled_data <- data[shuffled_indices, ]
+  return(shuffled_data)
+}
+
+```
+
+# MODEL SPECIFICATION
+
+## Cross validation
+
+```{r}
+# standardize and shuffle the data
+standardize.columns <- c("newpos", "intcar", "hosp", "newpos_av7D")
+shuffled.covid.data<-shuffle(covid.data, 10)
+standard.covid.data <- standardize(shuffled.covid.data, standardize.columns)
+
+# Number of folds
+k <- 10
+
+# Adding a column with a unique ID for each row
+standard.covid.data$unique_id <- row.names(standard.covid.data)
+
+# Index creation
+folds <- createFolds(y = standard.covid.data$unique_id, k = k, list = TRUE, returnTrain = FALSE)
+
+# Creation of test and validation set
+validation_sets <- list()
+training_sets <- list()
+
+for (i in 1:k) {
+  # Index of the test and validation set for the i fold
+  test_indices <- unlist(folds[i])
+  validation_indices <- setdiff(standard.covid.data$unique_id, test_indices)
+
+  # Adding the sets tothe lists
+  validation_sets[[i]] <- standard.covid.data[test_indices, ]
+  training_sets[[i]] <- standard.covid.data[validation_indices, ]
+}
+
+```
+
+```{r}
+
+mse.freq.prior<-numeric(k)
+  for (i in 1:k){
+    linearmodelhosp = lm(hospH8 ~gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, data=training_sets[[i]])
+
+    mse.freq.prior[i] <- mse_freq(linearmodelhosp, validation_sets[[i]], "hospH8")
+  }
+summary(linearmodelhosp)
+print(paste("Mean MSE is", mean(mse.freq.prior)))
+
+```
+
+
+```{r}
+mse.freq.prior1<-numeric(k)
+  for (i in 1:k){
+    linearmodelintcar = lm(intcarH8 ~gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, data=training_sets[[i]])
+
+    mse.freq.prior1[i] <- mse_freq(linearmodelintcar, validation_sets[[i]], "intcarH8")
+  }
+summary(linearmodelintcar)
+print(paste("Mean MSE is", mean(mse.freq.prior1)))
+
+```
+```{r}
+mse.freq.prior1<-numeric(k)
+  for (i in 1:k){
+    linearmodelintcar = lm(intcarH8 ~ arancione  + intcar + newpos_av7D, data=training_sets[[i]])
+
+    mse.freq.prior1[i] <- mse_freq(linearmodelintcar, validation_sets[[i]], "intcarH8")
+  }
+summary(linearmodelintcar)
+print(paste("Mean MSE is", mean(mse.freq.prior1)))
+```
+```{r}
+n=40
+nend=length(covid.data[,1])
+covid.data<-shuffle(covid.data)
+newdata<-standard.covid.data[1:n,]
+datalearning<-standard.covid.data[seq(n+1,nend),]
+rownames(datalearning)=seq(1:length(datalearning[,1]))
+
+
+linearmodelintcar = lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, data=datalearning)
+
+mse.freq.prior1 <- mse_freq(linearmodelintcar, newdata, "intcarH8")
+summary(linearmodelintcar)
+print(paste("Mean MSE is", mse.freq.prior1))
+plot(linearmodelintcar)
+```
+
+
+
+

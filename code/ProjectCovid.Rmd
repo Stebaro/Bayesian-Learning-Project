@@ -1,0 +1,486 @@
+---
+title: "BayesianCovid"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-01-26"
+---
+
+# Data description
+
+```{r}
+library(BAS)
+#Showing the first 6 lines of the dataset
+covid.data <- read.csv("covidLom2020_21.csv")
+```
+
+
+## Shapiro test
+
+```{r}
+
+## DA RIMUOVERE (?)
+## appendix (?)
+
+num_vars <- columns
+normality_results <- lapply(covid.data[num_vars], function(x) { 
+  shapiro.test(x)
+})
+
+for (i in 1:length(num_vars)) {
+  cat("Shapiro test for", num_vars[i], ":\n")
+  print(normality_results[[i]])
+  cat("\n")
+}
+```
+
+## Model Specification
+
+## Funzioni
+
+```{r}
+covid.data$gialla <- as.numeric(covid.data$color == "Gialla")
+covid.data$bianca <- as.numeric(covid.data$color == "Bianca")
+covid.data$rossa <- as.numeric(covid.data$color == "Rossa")
+covid.data$arancione <- as.numeric(covid.data$color == "Arancione")
+covid.data$color<-NULL
+covid.data$X<-NULL
+
+```
+
+
+```{r}
+
+## MODIFICARE !!
+
+#standardize <- function (data, names, centers, scales) {
+#  new.data <- data
+#  for (name in names) {
+#    if (is.numeric(data[1, name])) {
+#      new.data[[name]] <- scale(data[[name]],
+#                                ifelse(missing(centers), TRUE, centers[[name]]),
+#                                ifelse(missing(scales), TRUE, scales[[name]]))
+#    }
+#  }
+#  return (new.data)
+#}
+
+standardize <- function(data, cols) {
+  temp.data <- data
+  for (col in cols) {
+    if (is.numeric(data[[col]])) {
+      temp.data[[col]] <- scale(data[[col]])
+    }
+  }
+  temp.data
+  return(temp.data)
+}
+
+
+mse <- function (model, validation_set, target, estimator) {
+  pred_value <- predict(model, validation_set, estimator = estimator)$fit
+  true_value <- validation_set[[target]]
+  return (mean((true_value - pred_value)^2))
+}
+
+## MODIFICARE
+
+#shuffle <- function (data) {
+#  return (data[sample(seq(1, nrow(data)), nrow(data)),])
+#}
+
+shuffle <- function(data) {
+  shuffled_indices <- sample(nrow(data))
+  shuffled_data <- data[shuffled_indices, ]
+  return(shuffled_data)
+}
+
+```
+
+# MODEL SPECIFICATION
+
+## Cross validation
+
+```{r}
+#install.packages("caret")
+
+## CAPIRE BENE FUNZIONAMENTO
+
+library(caret)
+
+standardize.columns <- c("newpos", "intcar", "hosp", "newpos_av7D")
+shuffled.covid.data<-shuffle(covid.data)
+standard.covid.data <- standardize(shuffled.covid.data, standardize.columns)
+# Numero desiderato di fold
+k <- 10
+
+# Aggiungi una colonna con un ID unico al dataset
+standard.covid.data$unique_id <- row.names(standard.covid.data)
+
+# Creazione degli indici per la cross-validation
+folds <- createFolds(y = standard.covid.data$unique_id, k = k, list = TRUE, returnTrain = FALSE)
+
+# Creazione dei test set e validation set
+validation_sets <- list()
+training_sets <- list()
+
+for (i in 1:k) {
+  # Indici del test set per il fold i-esimo
+  test_indices <- unlist(folds[i])
+
+  # Indici del validation set per il fold i-esimo
+  validation_indices <- setdiff(standard.covid.data$unique_id, test_indices)
+
+  # Aggiungi i test set e validation set alle rispettive liste
+  validation_sets[[i]] <- standard.covid.data[test_indices, ]
+  training_sets[[i]] <- standard.covid.data[validation_indices, ]
+}
+
+```
+
+## Tuning alpha for HospH8
+
+```{r}
+
+## AGGIUMGERE COMMENTI
+
+for(alpha in c(0.01,0.1,1,10, 100, 200)){
+  mse.g.prior<-numeric(k)
+  for (i in 1:k){
+    modelgprior <- bas.lm(hospH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          alpha= alpha, 
+                          prior = "g-prior", modelprior = Bernoulli(1))
+    mse.g.prior[i] <- mse(modelgprior, validation_sets[[i]], "hospH8", "BMA")
+  }
+  print(paste("Mean MSE for alpha", alpha, "is", mean(mse.g.prior)))
+  
+}
+```
+
+## JZS HospH8
+
+```{r}
+
+##AGGIUNGERE COMMENTI
+
+mse.jzs.prior<-numeric(k)
+  for (i in 1:k){
+    modelJZS <- bas.lm(hospH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          prior = "JZS", modelprior = Bernoulli(1))
+    
+    mse.jzs.prior[i] <- mse(modelJZS, validation_sets[[i]], "hospH8", "BMA")
+  }
+  print(paste("Mean MSE is", mean(mse.jzs.prior)))
+  
+```
+
+## BIC HospH8
+
+```{r}
+
+## \\
+
+mse.bic.prior<-numeric(k)
+  for (i in 1:k){
+    modelBIC <- bas.lm(hospH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          modelprior = Bernoulli(1),
+                          prior = "BIC")
+    
+    mse.bic.prior[i] <- mse(modelBIC, validation_sets[[i]], "hospH8", "BMA")
+  }
+  print(paste("Mean MSE is", mean(mse.bic.prior)))
+
+```
+
+## Tuning alpha for IntcarH8
+
+```{r}
+
+## \\
+
+for(alpha in c(0.01,0.1,1,10, 100, 200)){
+  mse.g.prior1<-numeric(k)
+  for (i in 1:k){
+    modelgpriorintcarH8 <- bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          alpha= alpha, 
+                          prior = "g-prior", modelprior = Bernoulli(1))
+    mse.g.prior1[i] <- mse(modelgpriorintcarH8, validation_sets[[i]], "intcarH8", "BMA")
+  }
+  print(paste("Mean MSE for alpha", alpha, "is", mean(mse.g.prior1)))
+  
+}
+```
+
+## JZS IntcarH8
+
+```{r}
+
+## \\
+
+mse.jzs.prior<-numeric(k)
+  for (i in 1:k){
+    modelJZSintcarH8 <- bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          prior = "JZS", modelprior = Bernoulli(1))
+    
+    mse.jzs.prior[i] <- mse(modelJZSintcarH8, validation_sets[[i]], "intcarH8", "BMA")
+  }
+  print(paste("Mean MSE is", mean(mse.jzs.prior)))
+  
+```
+
+## BIC IntcarH8
+
+```{r}
+
+## \\
+
+mse.bic.prior<-numeric(k)
+  for (i in 1:k){
+    modelBICintcarH8 <- bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = training_sets[[i]], 
+                          modelprior = Bernoulli(1),
+                          prior = "BIC") 
+                          
+    
+    mse.bic.prior[i] <- mse(modelBICintcarH8, validation_sets[[i]], "intcarH8", "BMA")
+  }
+  print(paste("Mean MSE is", mean(mse.bic.prior)))
+
+```
+
+# MODEL SELECTION
+
+## BIC model for hospH8
+
+```{r}
+
+finalmodelbic=bas.lm(hospH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = standard.covid.data, 
+                          prior = "BIC", modelprior = uniform())
+
+
+
+round(summary(finalmodelbic), 3)
+best=which.max(finalmodelbic$logmarg)
+bestmodel=finalmodelbic$which[[best]]+1
+print(bestmodel)
+bestgamma=rep(0,finalmodelbic$n.vars)
+bestgamma[bestmodel]=1
+print(bestgamma)
+
+## SELEZIONARE SOLO GRAFICO INCLUSION PROBAILITIES
+
+plot(finalmodelbic, which = 1, ask = FALSE, caption = "", sub.caption = "")
+plot(finalmodelbic, which = 4, ask = FALSE, caption = "", sub.caption = "")
+
+```
+
+hosp and newpos_av7D have inclusion probability 1 suggesting that they will be included in the model
+
+```{r}
+
+coefs= coef(finalmodelbic)
+coefs
+
+plot(confint(coefs))
+
+par(mfrow=c(2,4))
+plot(coefs, ask=F)
+out=confint(coefs)[,1:2]
+coef.BIC=cbind(coefs$postmean, coefs$postsd, out)
+names=c("post mean", "post sd", colnames(out))
+colnames(coef.BIC)=names
+par(mfrow=c(1,1))
+round(coef.BIC, 3)
+
+
+```
+
+```{r}
+image(finalmodelbic, rotate=FALSE)
+```
+
+## BIC model for INTCARH8
+
+```{r}
+finalmodelbicintcarH8=bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = standard.covid.data, 
+                          prior = "BIC", modelprior = uniform())
+
+round(summary(finalmodelbicintcarH8), 3)
+best=which.max(finalmodelbicintcarH8$logmarg)
+bestmodel=finalmodelbicintcarH8$which[[best]]+1
+print(bestmodel)
+bestgamma=rep(0,finalmodelbicintcarH8$n.vars)
+bestgamma[bestmodel]=1
+print(bestgamma)
+
+
+plot(finalmodelbicintcarH8, which = 1, ask = FALSE, caption = "", sub.caption = "")
+plot(finalmodelbicintcarH8, which = 4, ask = FALSE, caption = "", sub.caption = "")
+
+```
+
+```{r}
+
+## COME SOPRA
+
+coefs= coef(finalmodelbicintcarH8)
+coefs
+
+plot(confint(coefs))
+
+par(mfrow=c(2,4))
+plot(coefs, ask=F)
+out=confint(coefs)[,1:2]
+coef.BIC=cbind(coefs$postmean, coefs$postsd, out)
+names=c("post mean", "post sd", colnames(out))
+colnames(coef.BIC)=names
+par(mfrow=c(1,1))
+round(coef.BIC, 3)
+
+```
+
+```{r}
+image(finalmodelbicintcarH8, rotate=FALSE)
+```
+
+```{r}
+## MANCA MODELLO INTCARH8
+
+
+
+## MANCA MSE PER MODELLI TROVATI DI INTCARH8 E HOSPH8
+
+## CONFRONTO MSE USANDO BMA O SOLO MODELLO MIGLIORE/CON TUTTE LE VARIABILI
+```
+
+# prediction
+
+### hospH8
+
+```{r}
+
+## MANCA STANDARDIZZAZIONE (?)
+## MODIFICARE E COMMENTARE
+
+covid.data<-shuffle(covid.data)
+
+
+n=40
+nend=length(covid.data[,1])
+newdata<-covid.data[1:n,]
+datalearning<-covid.data[seq(n+1,nend),]
+rownames(datalearning)=seq(1:length(datalearning[,1]))
+
+modelJZShospH8 <- bas.lm(hospH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = datalearning, 
+                          prior = "JZS", modelprior = Bernoulli(1))
+
+betaZS2 = coef(modelJZShospH8)
+plot(confint(betaZS2),main="ZS-prior ")
+
+fitted<-predict(modelJZShospH8, estimator = "BMA")
+prednew <- predict(modelJZShospH8,newdata=newdata, estimator = "BMA")
+
+plot(fitted$Ypred[1:length(fitted$Ypred)],datalearning$hospH8[1:length(fitted$Ypred)],
+  pch = 16,
+  xlab = expression(hat(mu[i])), ylab = 'Y',type="p", main="Fitted vs Prediction HospH8")
+
+
+points(prednew$Ypred, newdata$hospH8,
+  pch = 16,
+  col="red",type="p"
+)
+abline(0,1)
+
+BPM <- predict(modelJZShospH8, estimator = "BPM", newdata=newdata,se.fit = TRUE)
+conf.fit <- confint(BPM, parm = "mean")
+conf.pred <- confint(BPM, parm = "pred")
+plot(conf.pred, main="Out of sample: pred. (black) vs true (red)")
+
+points(seq(1:n),newdata$hospH8,col="red")
+```
+
+### intcarH8
+
+```{r}
+covid.data<-shuffle(covid.data)
+n=40
+nend=length(covid.data[,1])
+newdata<-covid.data[1:n,]
+datalearning<-covid.data[seq(n+1,nend),]
+rownames(datalearning)=seq(1:length(datalearning[,1]))
+
+modelJZSintcarH8 <- bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = datalearning, 
+                          prior = "JZS", modelprior = Bernoulli(1))
+
+betaZS2 = coef(modelJZSintcarH8)
+plot(confint(betaZS2),main="ZS-prior ")
+
+fitted<-predict(modelJZSintcarH8, estimator = "BMA")
+prednew <- predict(modelJZSintcarH8,newdata=newdata, estimator = "BMA")
+
+plot(fitted$Ypred[1:length(fitted$Ypred)],datalearning$intcarH8[1:length(fitted$Ypred)],
+  pch = 16,
+  xlab = expression(hat(mu[i])), ylab = 'Y',type="p", main="Fitted vs Prediction HospH8")
+
+
+points(prednew$Ypred, newdata$intcarH8,
+  pch = 16,
+  col="red",type="p"
+)
+abline(0,1)
+```
+
+```{r}
+BPM <- predict(modelJZSintcarH8, estimator = "BPM", newdata=newdata,se.fit = TRUE)
+conf.fit <- confint(BPM, parm = "mean")
+conf.pred <- confint(BPM, parm = "pred")
+plot(conf.pred, main="Out of sample: pred. (black) vs true (red)")
+
+points(seq(1:n),newdata$intcarH8,col="red")
+```
+
+```{r}
+covid.data<-shuffle(covid.data)
+n=40
+nend=length(covid.data[,1])
+newdata<-covid.data[1:n,]
+datalearning<-covid.data[seq(n+1,nend),]
+rownames(datalearning)=seq(1:length(datalearning[,1]))
+
+modelJZSintcarH8 <- bas.lm(intcarH8 ~ gialla + arancione + rossa + newpos + intcar + hosp + newpos_av7D, 
+                          data = datalearning, 
+                          prior = "JZS", modelprior = Bernoulli(1))
+
+betaZS2 = coef(modelJZSintcarH8)
+plot(confint(betaZS2),main="ZS-prior ")
+
+fitted<-predict(modelJZSintcarH8, estimator = "BMA")
+prednew <- predict(modelJZSintcarH8,newdata=newdata, estimator = "BMA")
+
+plot(fitted$Ypred[1:length(fitted$Ypred)],datalearning$intcarH8[1:length(fitted$Ypred)],
+  pch = 16,
+  xlab = expression(hat(mu[i])), ylab = 'Y',type="p")
+
+
+points(prednew$Ypred, newdata$intcarH8,
+  pch = 16,
+  col="red",type="p"
+)
+abline(0,1)
+
+BPM <- predict(modelJZSintcarH8, estimator = "BPM", newdata=newdata,se.fit = TRUE)
+conf.fit <- confint(BPM, parm = "mean")
+conf.pred <- confint(BPM, parm = "pred")
+plot(conf.pred, main="Out of sample: pred. (black) vs true (red)")
+
+points(seq(1:n),newdata$intcarH8,col="red")
+```

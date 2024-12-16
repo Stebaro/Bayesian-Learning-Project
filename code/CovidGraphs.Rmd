@@ -1,0 +1,221 @@
+---
+title: "CovidGraphs"
+output: html_document
+date: "2024-02-02"
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Data description
+
+```{r cars}
+library(BAS)
+
+#Loading and showing the first 6 lines of the dataset
+covid.data <- read.csv("covidLom2020_21.csv")
+head(covid.data)
+
+#Showing the attributes and their type
+dim(covid.data)
+str(covid.data)
+summary(covid.data)
+
+```
+
+Out dataset has 205 observations and 10 columns.
+The attributes are :
+
+-   X : a unique number associated to each observation that we will remove since not needed
+
+-   color : a character indicating the color of the zone, it can be "Arancione", " Bianca", "Gialla", "Rossa".
+    We will need to change this variable and turn it into categorical to use it for our models
+
+-   newpos : a number inticating the number of new positive cases
+
+-   intcar : int 63 64 59 56 49 42 43 42 43 41 ...
+
+-   hosp : int 685 694 660 655 633 601 608 599 598 575 ...
+
+-   day : chr "2020-12-13" "2020-12-14" "2020-12-15" "2020-12-16" ...
+
+-   newpos_av7D: num 344 322 287 275 261 ...
+
+-   hospH8 : int 599 598 575 545 526 469 465 479 496 489 ...
+
+-   intcarH8 : int 42 43 41 39 35 34 36 36 38 38 ...
+
+-   dayH8 : chr "2020-12-20" "2020-12-21" "2020-12-22" "2020-12-23" ...
+
+Adding the binary columns for the color and removing the ones I don't need anymore
+
+```{r}
+columns=c('newpos', 'intcar', 'hosp', 'newpos_av7D')
+
+whitedata<-subset(covid.data, covid.data$color=='Bianca')
+cor_matrixwhite <- cor(whitedata[columns])
+cor_dfwhite <- as.data.frame(as.table(cor_matrixwhite))
+colnames(cor_dfwhite) <- c("Var1", "Var2", "correlation")
+
+orangedata<-subset(covid.data, covid.data$color=='Arancione')
+cor_matrixorange <- cor(orangedata[columns])
+cor_dforange <- as.data.frame(as.table(cor_matrixorange))
+colnames(cor_dforange) <- c("Var1", "Var2", "correlation")
+
+reddata<-subset(covid.data, covid.data$color=='Rossa')
+cor_matrixred <- cor(reddata[columns])
+cor_dfred <- as.data.frame(as.table(cor_matrixred))
+colnames(cor_dfred) <- c("Var1", "Var2", "correlation")
+
+yellowdata<-subset(covid.data, covid.data$color=='Gialla')
+cor_matrixyellow <- cor(yellowdata[columns])
+cor_dfyellow <- as.data.frame(as.table(cor_matrixyellow))
+colnames(cor_dfyellow) <- c("Var1", "Var2", "correlation")
+
+cor_matrix <- cor(covid.data[columns])
+cor_df <- as.data.frame(as.table(cor_matrix))
+colnames(cor_df) <- c("Var1", "Var2", "correlation")
+```
+
+```{r}
+library('ggplot2')
+ggplot(data = cor_df, aes(x = Var1, y = Var2)) +
+  geom_tile(aes(fill = correlation), color = "white") +
+  scale_fill_gradient2(low = "yellow", mid = "white", high = "red", midpoint = 0) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), vjust = 1) +
+  theme_minimal() +
+  labs(title = "Correlation Matrix total", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data = cor_dfyellow, aes(x = Var1, y = Var2)) +
+  geom_tile(aes(fill = correlation), color = "white") +
+  scale_fill_gradient2(low = "yellow", mid = "white", high = "red", midpoint = 0) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), vjust = 1) +
+  theme_minimal() +
+  labs(title = "Correlation Matrix Gialla", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data = cor_dfred, aes(x = Var1, y = Var2)) +
+  geom_tile(aes(fill = correlation), color = "white") +
+  scale_fill_gradient2(low = "yellow", mid = "white", high = "red", midpoint = 0) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), vjust = 1) +
+  theme_minimal() +
+  labs(title = "Correlation Matrix Rossa", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data = cor_dfwhite, aes(x = Var1, y = Var2)) +
+  geom_tile(aes(fill = correlation), color = "white") +
+  scale_fill_gradient2(low = "yellow", mid = "white", high = "red", midpoint = 0) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), vjust = 1) +
+  theme_minimal() +
+  labs(title = "Correlation Matrix Bianca", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data = cor_dforange, aes(x = Var1, y = Var2)) +
+  geom_tile(aes(fill = correlation), color = "white") +
+  scale_fill_gradient2(low = "yellow", mid = "white", high = "red", midpoint = 0) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), vjust = 1) +
+  theme_minimal() +
+  labs(title = "Correlation Matrix Arancione", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+library('psych')
+
+columnsInt<-c(columns,'intcarH8')
+columnsH8<-c(columns,'hospH8')
+
+pairs.panels(covid.data[, columnsInt], 
+             pch = 16,
+             main = "Scatterplot Matrix with Density Plots for IntcarH8")
+             #col=covid.data$color) 
+pairs.panels(covid.data[, columnsH8], 
+             pch = 16,          
+             main = "Scatterplot Matrix with Density Plots for hospH8")
+
+
+pairs.panels(whitedata[, columnsInt], 
+             pch = 16,
+             main = "Scatterplot Matrix with Density Plots for IntcarH8 WHITE") 
+
+pairs.panels(whitedata[, columnsH8], 
+             pch = 16,          
+             main = "Scatterplot Matrix with Density Plots for hospH8 WHITE")
+
+
+pairs.panels(yellowdata[, columnsInt], 
+             pch = 16,
+             main = "Scatterplot Matrix with Density Plots for IntcarH8 YELLOW") 
+
+pairs.panels(yellowdata[, columnsH8], 
+             pch = 16,          
+             main = "Scatterplot Matrix with Density Plots for hospH8 YELLOW")
+
+
+pairs.panels(reddata[, columnsInt], 
+             pch = 16,
+             main = "Scatterplot Matrix with Density Plots for IntcarH8 RED") 
+
+pairs.panels(reddata[, columnsH8], 
+             pch = 16,          
+             main = "Scatterplot Matrix with Density Plots for hospH8 RED")
+
+
+pairs.panels(orangedata[, columnsInt], 
+             pch = 16,
+             main = "Scatterplot Matrix with Density Plots for IntcarH8 ORANGE") 
+
+pairs.panels(orangedata[, columnsH8], 
+             pch = 16,          
+             main = "Scatterplot Matrix with Density Plots for hospH8 ORANGE")
+
+```
+
+```{r}
+colonne1=c('newpos', 'intcar', 'hosp', 'newpos_av7D')
+colori <- c("red", "blue", "green", "orange")
+
+boxplot(covid.data[,colonne1],
+        col = colori,
+        main = "BoxPlot of the covariates"
+        ) 
+```
+
+
+
+**GRAFICO DISPERSIONE HOSPH8 TOTALE:** L'immagine che hai inviato mostra una matrice di grafici a dispersione con trame di densità per "hospH8".
+Le variabili incluse sono "newpos", "intcar", "newpos_av7D", e "hospH8".
+Ogni grafico a dispersione è accompagnato da un coefficiente di correlazione che indica la forza della relazione tra le due variabili.
+Ci sono trame di densità sulla linea diagonale della matrice, che rappresentano la distribuzione di ogni variabile.
+
+In un'analisi di regressione bayesiana, questa tabella può essere molto utile.
+I coefficienti di correlazione variano da 0.71 a 0.98, indicando forti correlazioni positive tra tutte le coppie di variabili.
+Questo suggerisce che c'è una forte relazione lineare tra queste variabili, il che potrebbe influenzare la tua capacità di prevedere accuratamente le due variabili target.
+
+Tuttavia, è importante notare che la correlazione non implica causalità.
+Anche se queste variabili sono fortemente correlate, non significa necessariamente che una variabile causi un cambiamento nell'altra.
+Inoltre, la presenza di correlazioni forti tra le variabili indipendenti (nota come multicollinearità) può rendere difficile l'interpretazione dei coefficienti di regressione e può influenzare l'accuratezza delle tue previsioni.
+
+Quindi, mentre questa tabella fornisce informazioni preziose sulle relazioni tra le variabili, dovresti fare attenzione quando la usi per costruire il tuo modello di regressione bayesiana.
+Potrebbe essere utile esplorare ulteriormente queste relazioni, forse esaminando le relazioni tra le variabili in diversi sottogruppi dei tuoi dati o utilizzando tecniche di riduzione della dimensionalità come l'analisi delle componenti principali (PCA).
+
+Esatto, questa tabella può effettivamente aiutarti a identificare le variabili che potrebbero essere ridondanti nel tuo modello di regressione bayesiana.
+Se due variabili hanno un coefficiente di correlazione molto alto, significa che tendono a variare insieme.
+In altre parole, se conosci il valore di una variabile, potresti essere in grado di prevedere con precisione il valore dell'altra.
+Questo può rendere una delle variabili ridondante.
+
+Ad esempio, se "newpos" e "intcar" hanno un coefficiente di correlazione di 0.96, potrebbe non essere necessario includere entrambe nel tuo modello, poiché contengono informazioni molto simili.
+Potresti scegliere di escludere una di queste variabili o potresti combinare le informazioni di entrambe le variabili in qualche modo, ad esempio creando una nuova variabile che è la media di "newpos" e "intcar".
+
+Tuttavia, è importante notare che la decisione di escludere o combinare variabili dovrebbe essere presa con cautela e dovrebbe essere basata non solo sui coefficienti di correlazione, ma anche sulla tua conoscenza del dominio e su altre considerazioni statistiche.
+Ad esempio, se "newpos" e "intcar" sono entrambe fortemente correlate con la tua variabile target, potrebbe essere ancora utile includere entrambe nel tuo modello.
+
+**per white** dico che intcarH8 è sempre = 1 quindi bisogna escluderlo dai predictors Sì, hai ragione.
+Se l'ultima riga di grafici è orizzontale, potrebbe indicare che la variabile corrispondente (in questo caso, "intcarH8") ha un valore costante o quasi costante per tutti i punti dati.
+In altre parole, non varia molto tra i diversi punti dati.
+
+In un'analisi di regressione, una variabile con poca o nessuna variazione può non essere molto utile perché non contribuisce a spiegare la variazione nella variabile target.
+Infatti, potrebbe essere difficile stimare l'effetto di questa variabile sul target perché non ci sono abbastanza variazioni nei dati per farlo.
+
+Quindi, potrebbe avere senso escludere questa variabile dal tuo modello di regressione.
