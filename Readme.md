@@ -32,7 +32,7 @@ The project involves the following steps:
 ## Repository Contents
 
 - **`final_project_Baroni_Menozzi.pdf`**: Comprehensive project report with detailed explanations, results, and plots.
-- Additional code and data files, if included, support the analysis.
+- Additional code and data files support the analysis.
 
 ## Main Findings
 
